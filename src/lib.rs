@@ -3,7 +3,7 @@ extern crate base64;
 #[macro_use]
 extern crate lazy_static;
 
-mod zorro {
+pub mod zorro {
     const CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     lazy_static! {
         static ref CHARMAP: HashMap<char, u8> = {
@@ -22,9 +22,9 @@ mod zorro {
 
     use std::collections::HashMap;
     use std::path::Path;
+    use std::fs;
     use std::fs::File;
     use std::io::BufWriter;
-    use std::str;
 
     pub fn encode(raw: &str, target_path: &str, mode: &str) {
         let u8_values = encode_to_u8s(raw);
@@ -32,10 +32,21 @@ mod zorro {
         write_png(pixel_data, target_path);
     }
 
+    pub fn encode_from_file(filepath: &str, target_path: &str, mode: &str) {
+        let contents = fs::read_to_string(filepath)
+            .expect("Something went wrong reading the file");
+        encode(&contents, target_path, mode);
+    }
+
     pub fn decode(img_path: &str, mode: &str) -> String {
         let pparts = read_png(img_path);
         let u8_vals = depixelize(pparts, mode);
         return decode_from_u8s(u8_vals);
+    }
+
+    pub fn decode_to_file(in_path: &str, out_path: &str, mode: &str) {
+        let decoded_data = decode(in_path, mode);
+        fs::write(out_path, decoded_data).expect("Unable to write file");
     }
 
     fn write_png(mut pixel_parts: Vec<u8>, target_path: &str) {
@@ -169,5 +180,11 @@ mod tests {
         println!("encoded string should be: eyJkYXlzIjogWyJTdSIsICJNbyIsICJUdSIsICJXZSIsICJUaCIsICJGciIsICJTYSJdfQ==", );
         let found_data = zorro::decode("./examples/days1.png", "static");
         assert_eq!(raw_data, found_data);
+    }
+
+    #[test]
+    fn it_encodes_from_file() {
+        zorro::encode_from_file("./examples/colors.json", "./examples/colors.png", "static");
+        assert_eq!(2 + 2, 4);
     }
 }
