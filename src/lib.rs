@@ -52,7 +52,7 @@ pub fn decode_to_file(in_path: &str, out_path: &str) {
     fs::write(out_path, decoded_data).expect("Unable to write file");
 }
 
-pub fn decode_file_data(in_data: &[u8]) {
+pub fn decode_file_data(in_data: &[u8]) -> String {
     let pparts = read_png_data(in_data);
     return decode_pixels(&pparts);
 }
@@ -78,11 +78,8 @@ fn write_png(mut pixel_parts: Vec<u8>, target_path: &str) {
 }
 
 fn read_png(path: &str) -> Vec<u8> {
-    return read_png_data(File::open(path).unwrap());
-}
-
-fn read_png_data(data: &[u8]) -> Vec<u8> {
-    let decoder = png::Decoder::new(data);
+    let decoder = png::Decoder::new(File::open(path).unwrap());
+    //decode_png(decoder);
     let (info, mut reader) = decoder.read_info().unwrap();
     // Allocate the output buffer.
     let mut buf = vec![0; info.buffer_size()];
@@ -92,6 +89,30 @@ fn read_png_data(data: &[u8]) -> Vec<u8> {
     //let in_animation = reader.info().frame_control.is_some();
     return buf;
 }
+
+fn read_png_data(data: &[u8]) -> Vec<u8> {
+    let decoder = png::Decoder::new(data);
+    //decode_png(decoder);
+    let (info, mut reader) = decoder.read_info().unwrap();
+    // Allocate the output buffer.
+    let mut buf = vec![0; info.buffer_size()];
+    // Read the next frame. An APNG might contain multiple frames.
+    reader.next_frame(&mut buf).unwrap();
+    // Inspect more details of the last read frame.
+    //let in_animation = reader.info().frame_control.is_some();
+    return buf;
+}
+
+// fn decode_png(decoder: png::Decoder) -> Vec<u8> {
+//    let (info, mut reader) = decoder.read_info().unwrap();
+//     // Allocate the output buffer.
+//     let mut buf = vec![0; info.buffer_size()];
+//     // Read the next frame. An APNG might contain multiple frames.
+//     reader.next_frame(&mut buf).unwrap();
+//     // Inspect more details of the last read frame.
+//     //let in_animation = reader.info().frame_control.is_some();
+//     return buf;
+// }
 
 fn write_meta_pixel(mode: &str, depth: u8) -> Vec<u8> {
     let mut pixel_data:Vec<u8> = Vec::new();
@@ -176,6 +197,18 @@ pub fn decode_from_u8s(mut data: Vec<u8>) -> String {
     return decoded_str;
 }
 
+use std::io::Read;
+
+fn get_file_as_byte_vec(filename: &str) -> Vec<u8> {
+    let mut f = File::open(&filename).expect("no file found");
+    let metadata = fs::metadata(&filename).expect("unable to read metadata");
+    let mut buffer = vec![0; metadata.len() as usize];
+    f.read(&mut buffer).expect("buffer overflow");
+
+    buffer
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,10 +257,8 @@ mod tests {
     #[test]
     fn it_decodes_from_png_data() {
         let raw_text_data = "{\"days\": [\"Su\", \"Mo\", \"Tu\", \"We\", \"Th\", \"Fr\", \"Sa\"]}";
-        let raw_data = File::open("./examples/days1.png").unwrap()
-        println!("called `zorro::decode()`");
-        println!("encoded string should be: eyJkYXlzIjogWyJTdSIsICJNbyIsICJUdSIsICJXZSIsICJUaCIsICJGciIsICJTYSJdfQ==", );
-        let found_data = decode_file_data(raw_data);
+        let raw_data = get_file_as_byte_vec("./examples/days1.png");
+        let found_data = decode_file_data(&raw_data);
         assert_eq!(raw_text_data, found_data);
     }
 }
