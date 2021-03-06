@@ -27,7 +27,7 @@ use std::io::BufWriter;
 
 pub fn encode(raw: &str, target_path: &str, mode: &str) {
     let u8_values = encode_to_u8s(raw);
-    let pixel_data = pixelize(u8_values, mode);
+    let pixel_data = pixelize(u8_values, mode, 8);
     write_png(pixel_data, target_path);
 }
 
@@ -37,30 +37,40 @@ pub fn encode_from_file(filepath: &str, target_path: &str, mode: &str) {
     encode(&contents, target_path, mode);
 }
 
-pub fn decode(img_path: &str, mode: &str) -> String {
+pub fn decode(img_path: &str) -> String {
     let pparts = read_png(img_path);
-    let u8_vals = depixelize(pparts, mode);
+    return decode_pixels(&pparts);
+}
+
+pub fn decode_pixels(pparts: &[u8]) -> String {
+    let u8_vals = depixelize(pparts);
     return decode_from_u8s(u8_vals);
 }
 
-pub fn decode_to_file(in_path: &str, out_path: &str, mode: &str) {
-    let decoded_data = decode(in_path, mode);
+pub fn decode_to_file(in_path: &str, out_path: &str) {
+    let decoded_data = decode(in_path);
     fs::write(out_path, decoded_data).expect("Unable to write file");
 }
 
+pub fn decode_file_data(in_data: &[u8]) {
+    let pparts = read_png_data(in_data);
+    return decode_pixels(&pparts);
+}
+
 fn write_png(mut pixel_parts: Vec<u8>, target_path: &str) {
-    let size:usize = pixel_parts.len();
+    let size:u32 = pixel_parts.len() as u32;
     let side:u32 = ((size as f64)/3.0).sqrt().ceil() as u32;
     let area:u32 = side * side;
-    let blank_parts:usize = ((area*3) as usize) - size;
-    let mut blanks = vec![0; blank_parts];
+    let blank_parts:u32 = (area*3) - size;
+    let blank_lines:u32 = blank_parts / (3 * side);
+    let vec_size: usize = (blank_parts % (side*3)) as usize;
+    let mut blanks = vec![0; vec_size];
 
     pixel_parts.append(&mut blanks);
     let path = Path::new(target_path);
     let file = File::create(path).unwrap();
     let ref mut w = BufWriter::new(file);
-
-    let mut encoder = png::Encoder::new(w, side, side);
+    let mut encoder = png::Encoder::new(w, side, side-blank_lines);
     encoder.set_color(png::ColorType::RGB);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().unwrap();
@@ -68,7 +78,11 @@ fn write_png(mut pixel_parts: Vec<u8>, target_path: &str) {
 }
 
 fn read_png(path: &str) -> Vec<u8> {
-    let decoder = png::Decoder::new(File::open(path).unwrap());
+    return read_png_data(File::open(path).unwrap());
+}
+
+fn read_png_data(data: &[u8]) -> Vec<u8> {
+    let decoder = png::Decoder::new(data);
     let (info, mut reader) = decoder.read_info().unwrap();
     // Allocate the output buffer.
     let mut buf = vec![0; info.buffer_size()];
@@ -79,8 +93,20 @@ fn read_png(path: &str) -> Vec<u8> {
     return buf;
 }
 
-fn pixelize(data: Vec<u8>, mode: &str) -> Vec<u8> {
+fn write_meta_pixel(mode: &str, depth: u8) -> Vec<u8> {
     let mut pixel_data:Vec<u8> = Vec::new();
+    match mode {
+        "static" => pixel_data.push(1), // mode static (1)
+        "hidden" => pixel_data.push(2), // mode static (2)
+        _ => println!("Unknown Mode: {:?}", mode)
+    }
+    pixel_data.push(depth%8); // bit-depth 8
+    pixel_data.push(1); // version 1
+    return pixel_data;
+}
+
+fn pixelize(data: Vec<u8>, mode: &str, depth: u8) -> Vec<u8> {
+    let mut pixel_data = write_meta_pixel(mode, depth);
     if mode == "static" {
         for i in (0..data.len()).step_by(4) {
             pixel_data.push((data[i] << 2) + ((data[i+1] & 48) >> 4));
@@ -91,10 +117,14 @@ fn pixelize(data: Vec<u8>, mode: &str) -> Vec<u8> {
     return pixel_data;
 }
 
-fn depixelize(pixels: Vec<u8>, mode: &str) -> Vec<u8> {
+fn depixelize(pixels: &[u8]) -> Vec<u8> {
+    let mode:u8 = pixels[0] & 7;
+    let depth:u8 = ((pixels[1] & 7)+1)%9;
+    let version:u8 = pixels[2] & 7;
+    println!("MODE: {:?}, DEPTH: {:?}, VERSION: {:?}", mode, depth, version );
     let mut u8_vals:Vec<u8> = Vec::new();
-    if mode == "static" {
-        for i in (0..pixels.len()).step_by(3) {
+    if mode == 1 {
+        for i in (3..pixels.len()).step_by(3) {
             u8_vals.push(pixels[i] >> 2);
             u8_vals.push(((pixels[i] & 3) << 4) + (pixels[i+1] >> 4));
             u8_vals.push(((pixels[i+1] & 15) << 2) + (pixels[i+2] >> 6));
@@ -169,9 +199,7 @@ mod tests {
     #[test]
     fn it_decodes_from_png() {
         let raw_data = "{\"days\": [\"Su\", \"Mo\", \"Tu\", \"We\", \"Th\", \"Fr\", \"Sa\"]}";
-        println!("called `zorro::decode()`");
-        println!("encoded string should be: eyJkYXlzIjogWyJTdSIsICJNbyIsICJUdSIsICJXZSIsICJUaCIsICJGciIsICJTYSJdfQ==", );
-        let found_data = decode("./examples/days1.png", "static");
+        let found_data = decode("./examples/days1.png");
         assert_eq!(raw_data, found_data);
     }
 
@@ -183,7 +211,23 @@ mod tests {
 
     #[test]
     fn it_decodes_to_file() {
-        decode_to_file("./examples/colors1.png", "./examples/colors1.json", "static");
+        decode_to_file("./examples/colors1.png", "./examples/colors1.json");
         assert_eq!(2 + 2, 4);
+    }
+
+    #[test]
+    fn it_encodes_big_file() {
+        encode_from_file("./examples/big_file.json", "./examples/big_file.png", "static");
+        assert_eq!(2+2, 4);
+    }
+
+    #[test]
+    fn it_decodes_from_png_data() {
+        let raw_text_data = "{\"days\": [\"Su\", \"Mo\", \"Tu\", \"We\", \"Th\", \"Fr\", \"Sa\"]}";
+        let raw_data = File::open("./examples/days1.png").unwrap()
+        println!("called `zorro::decode()`");
+        println!("encoded string should be: eyJkYXlzIjogWyJTdSIsICJNbyIsICJUdSIsICJXZSIsICJUaCIsICJGciIsICJTYSJdfQ==", );
+        let found_data = decode_file_data(raw_data);
+        assert_eq!(raw_text_data, found_data);
     }
 }
