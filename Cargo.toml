@@ -2,9 +2,13 @@
 name = "zorro"
 version = "0.0.1"
 authors = ["chrisftw", "roxannedunn"]
+description = "Encode data into, and decode data out of images."
+homepage = "https://github.com/chrisftw/zorro"
+documentation = "https://github.com/chrisftw/zorro"
+repository = "https://github.com/chrisftw/zorro"
+readme = "README.md"
+license-file = "LICENSE"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 png = "0.16.8"
