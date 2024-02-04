@@ -7,14 +7,14 @@ const CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 lazy_static! {
     static ref CHARMAP: HashMap<char, u8> = {
         let mut cm = HashMap::with_capacity(64);
-        CHARS.char_indices().for_each(|(i,c)| {cm.insert(c, i as u8); ()});
+        CHARS.char_indices().for_each(|(i,c)| {cm.insert(c, i as u8);});
         cm
     };
 }
 lazy_static! {
     static ref REVCHARMAP: HashMap<u8, char> = {
         let mut cm = HashMap::with_capacity(64);
-        CHARS.char_indices().for_each(|(i,c)| {cm.insert(i as u8, c); ()});
+        CHARS.char_indices().for_each(|(i,c)| {cm.insert(i as u8, c);});
         cm
     };
 }
@@ -30,7 +30,7 @@ pub fn encode(raw: &str, target_path: &str, mode: &str, depth: u8, src_path: &st
     let src_pixels:Vec<u8>;
     let mut w:u32 = 0;
     let mut h:u32 = 0;
-    if src_path != "" {
+    if !src_path.is_empty() {
         src_pixels = read_png(src_path);
         let info = read_png_info(src_path);
         w = info.width;
@@ -50,12 +50,12 @@ pub fn encode_from_file(filepath: &str, target_path: &str, mode: &str, depth: u8
 
 pub fn decode(img_path: &str) -> String {
     let pparts = read_png(img_path);
-    return decode_pixels(&pparts);
+    decode_pixels(&pparts)
 }
 
 pub fn decode_pixels(pparts: &[u8]) -> String {
     let u8_vals = depixelize(pparts);
-    return decode_from_u8s(u8_vals);
+    decode_from_u8s(u8_vals)
 }
 
 pub fn decode_to_file(in_path: &str, out_path: &str) {
@@ -65,7 +65,7 @@ pub fn decode_to_file(in_path: &str, out_path: &str) {
 
 pub fn decode_file_data(in_data: &[u8]) -> String {
     let pparts = read_png_data(in_data);
-    return decode_pixels(&pparts);
+    decode_pixels(&pparts)
 }
 
 fn write_png(mut pixel_parts: Vec<u8>, target_path: &str, mut w:u32, mut h:u32) {
@@ -88,7 +88,7 @@ fn write_png(mut pixel_parts: Vec<u8>, target_path: &str, mut w:u32, mut h:u32) 
     }
     let path = Path::new(target_path);
     let file = File::create(path).unwrap();
-    let ref mut writer = BufWriter::new(file);
+    let writer = &mut BufWriter::new(file);
     let mut encoder = png::Encoder::new(writer, w, h);
     encoder.set_color(png::ColorType::RGB);
     encoder.set_depth(png::BitDepth::Eight);
@@ -104,13 +104,13 @@ fn read_png(path: &str) -> Vec<u8> {
     let mut buf = vec![0; info.buffer_size()];
     reader.next_frame(&mut buf).unwrap();
     // Inspect more details of the last read frame.
-    return buf;
+    buf
 }
 
 fn read_png_info(path: &str) -> png::OutputInfo {
     let decoder = png::Decoder::new(File::open(path).unwrap());
     let (info, _) = decoder.read_info().unwrap();
-    return info;
+    info
 }
 
 fn read_png_data(data: &[u8]) -> Vec<u8> {
@@ -119,7 +119,7 @@ fn read_png_data(data: &[u8]) -> Vec<u8> {
     // Allocate the output buffer.
     let mut buf = vec![0; info.buffer_size()];
     reader.next_frame(&mut buf).unwrap();
-    return buf;
+    buf
 }
 
 fn write_meta_pixel(mode: &str, depth: u8) -> Vec<u8> {
@@ -131,7 +131,7 @@ fn write_meta_pixel(mode: &str, depth: u8) -> Vec<u8> {
     }
     pixel_data.push(depth%8); // bit-depth 8
     pixel_data.push(1); // version 1
-    return pixel_data;
+    pixel_data
 }
 
 fn pixelize(data: Vec<u8>, mode: &str, depth: u8, src_pixels: &[u8]) -> Vec<u8> {
@@ -145,7 +145,7 @@ fn pixelize(data: Vec<u8>, mode: &str, depth: u8, src_pixels: &[u8]) -> Vec<u8> 
     } else if mode == "hidden" {
         // merge first src_pixel into meta pixel
         for i in 0..3 {
-            pixel_data[i] = (src_pixels[i] & 248) + pixel_data[i];
+            pixel_data[i] += src_pixels[i] & 248;
         }
         let blank_pixels:i32 = (src_pixels.len() as i32) - (((6/depth) as i32) * (data.len() as i32)) - 3; // minus 3 for meta pixel
         if blank_pixels < 0 {
@@ -174,11 +174,11 @@ fn pixelize(data: Vec<u8>, mode: &str, depth: u8, src_pixels: &[u8]) -> Vec<u8> 
         let src_len = src_pixels.len();
         let last_pixel = src_len - (blank_pixels as usize);
         //println!("leftovers should be divisible by 3: {:?}", last_pixel);
-        for i in last_pixel..src_len {
-            pixel_data.push(src_pixels[i] & 252);
+        for pixel in src_pixels.iter().take(src_len).skip(last_pixel) {
+            pixel_data.push(pixel & 252);
         }
     }
-    return pixel_data;
+    pixel_data
 }
 
 fn depixelize(pixels: &[u8]) -> Vec<u8> {
@@ -245,9 +245,10 @@ fn depixelize(pixels: &[u8]) -> Vec<u8> {
             u8_vals.push(pixels[i+2] & 63);
         }
     }
-    return u8_vals;
+    u8_vals
 }
 
+#[allow(clippy::same_item_push)]
 pub fn encode_to_u8s(raw: &str) -> Vec<u8> {
     let encoded_str = base64::encode(raw);
     let mut v : Vec<u8> = Vec::new();
@@ -267,7 +268,7 @@ pub fn encode_to_u8s(raw: &str) -> Vec<u8> {
             v.push(0);
         }
     }
-    return v;
+    v
 }
 
 pub fn decode_from_u8s(mut data: Vec<u8>) -> String {
@@ -287,12 +288,12 @@ pub fn decode_from_u8s(mut data: Vec<u8>) -> String {
         encoded_str.push('=');
     }
     let decoded_str_u8s =  base64::decode(encoded_str).unwrap();
-    let decoded_str = String::from_utf8(decoded_str_u8s.clone()).unwrap();
-    return decoded_str;
+    String::from_utf8(decoded_str_u8s).unwrap()
 }
 
 use std::io::Read;
 
+#[allow(dead_code)]
 fn get_file_as_byte_vec(filename: &str) -> Vec<u8> {
     let mut f = File::open(&filename).expect("no file found");
     let metadata = fs::metadata(&filename).expect("unable to read metadata");
